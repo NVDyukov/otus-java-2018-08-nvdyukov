@@ -62,6 +62,48 @@
                     </archive>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>com.github.wvengen</groupId>
+                <artifactId>proguard-maven-plugin</artifactId>
+                <version>2.0.14</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>proguard</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sf.proguard</groupId>
+                        <artifactId>proguard-base</artifactId>
+                        <version>6.0.3</version>
+                        <scope>runtime</scope>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <options>
+                        <option>-dontnote com.google.gson.**</option>
+                        <option>-dontnote jdk.internal.**</option>
+                        <option>-keepattributes *Annotation*</option>
+                        <option>-keepattributes Signature</option>
+                        <option>-keepattributes InnerClasses,EnclosingMethod</option>
+                        <option>-repackageclasses 'gameofthrones'</option>
+                        <option>-allowaccessmodification</option>
+                        <option>-keep	public class ru.otus.Run { public static void main(java.lang.String[]);}</option>
+                    </options>
+                    <obfuscate>true</obfuscate>
+                    <injar>${project.name}-jar-with-dependencies.jar</injar>
+                    <outjar>${project.name}-small.jar</outjar>
+                    <libs>
+                        <lib>${java.home}\jmods\java.base.jmod</lib>
+                        <lib>${java.home}\jmods\java.logging.jmod</lib>
+                        <lib>${java.home}\jmods\java.xml.jmod</lib>
+                        <lib>${java.home}\jmods\java.sql.jmod</lib>
+                    </libs>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
