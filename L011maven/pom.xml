@@ -51,7 +51,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <appendAssemblyId>true</appendAssemblyId>
+                    <appendAssemblyId>false</appendAssemblyId>
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
@@ -94,7 +94,7 @@
                         <option>-keep	public class ru.otus.Run { public static void main(java.lang.String[]);}</option>
                     </options>
                     <obfuscate>true</obfuscate>
-                    <injar>${project.name}-jar-with-dependencies.jar</injar>
+                    <!--injar>${project.name}-jar-with-dependencies.jar</injar-->
                     <outjar>${project.name}-small.jar</outjar>
                     <libs>
                         <lib>${java.home}\jmods\java.base.jmod</lib>
