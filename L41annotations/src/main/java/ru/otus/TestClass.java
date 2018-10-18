@@ -4,7 +4,7 @@ import ru.otus.core.Test;
 
 public class TestClass {
     @Test
-    public static void testMethod1() {
+    public void testMethod1() {
         System.out.println("testMethod1");
     }
 }

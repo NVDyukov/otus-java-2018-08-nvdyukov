@@ -2,10 +2,10 @@ package ru.otus.core;
 
 import java.util.List;
 
-public class InitMethodError extends Exception {
+public class InitMethodException extends Exception {
     private List<Throwable> errors;
 
-    public InitMethodError(List<Throwable> errors) {
+    public InitMethodException(List<Throwable> errors) {
         this.errors = errors;
     }
 

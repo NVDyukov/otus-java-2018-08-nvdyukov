@@ -13,7 +13,6 @@ public class TestClass {
     private final List<Method> afterMethods = new ArrayList<>();
     private final List<Method> testMethods = new ArrayList<>();
 
-
     public TestClass(Class<?> aClass) {
         this.aClass = aClass;
         init();

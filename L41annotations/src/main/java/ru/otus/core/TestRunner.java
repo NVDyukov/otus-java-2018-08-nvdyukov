@@ -10,51 +10,41 @@ import java.util.List;
 import java.util.Objects;
 
 public class TestRunner {
-    public void Run(Class clazz) throws InitMethodError {
+    public void run(Class clazz) throws InitMethodException, InvalidTestException, NoSuchMethodException,
+            IllegalAccessException, InvocationTargetException, InstantiationException {
         Objects.requireNonNull(clazz);
         validateClass(clazz);
         validatePublicConstructorNoArg(clazz);
         TestClass testClass = new TestClass(clazz);
-        validateContainsTestMethod(testClass);
         validateTestClassMethods(testClass);
-        try {
-            Object o = clazz.getConstructor().newInstance();
-            runTestMethods(o, testClass);
-        } catch (InstantiationException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
-        } catch (NoSuchMethodException e) {
-            e.printStackTrace();
-        }
+        Object o = clazz.getConstructor().newInstance();
+        runTestMethods(o, testClass);
     }
 
-    private void validateTestClassMethods(TestClass testClass) throws InitMethodError {
+    private void validateTestClassMethods(TestClass testClass) throws InitMethodException {
         List<Throwable> errors = new ArrayList<>();
         validateMethods(testClass.getBeforeMethods(), errors);
         validateMethods(testClass.getTestMethods(), errors);
         validateMethods(testClass.getAfterMethods(), errors);
         if (!errors.isEmpty()) {
-            throw new InitMethodError(errors);
+            throw new InitMethodException(errors);
         }
     }
 
-    private void validatePublicConstructorNoArg(Class clazz) {
+    private void validatePublicConstructorNoArg(Class clazz) throws InvalidTestException {
         Constructor[] constructors = clazz.getConstructors();
         boolean isValid = constructors.length == 1
                 && Modifier.isPublic(constructors[0].getModifiers()) && constructors[0].getParameters().length == 0;
         if (!isValid) {
-            throw new RuntimeException(clazz.getName()
+            throw new InvalidTestException(clazz.getName()
                     + " : у тестового класса должен быть один публичный конструктор без параметров");
         }
     }
 
-    private void validateContainsTestMethod(TestClass testClass) {
+    private void validateContainsTestMethod(TestClass testClass) throws InvalidTestException {
         List<Method> testMethods = testClass.getTestMethods();
         if (testMethods.isEmpty()) {
-            throw new RuntimeException(testClass.getaClass().getName()
+            throw new InvalidTestException(testClass.getaClass().getName()
                     + " не содержит методов, помеченных аннотацией @Test");
         }
     }
@@ -83,11 +73,11 @@ public class TestRunner {
                 });
     }
 
-    private void validateClass(Class<?> clazz) {
+    private void validateClass(Class<?> clazz) throws InvalidTestException {
         int modifiers = clazz.getModifiers();
         boolean b = Modifier.isAbstract(modifiers) || Modifier.isInterface(modifiers) || Modifier.isStatic(modifiers);
         if (b) {
-            throw new RuntimeException(clazz.getName()
+            throw new InvalidTestException(clazz.getName()
                     + " класс не должен быть: abstract, interface, static");
         }
     }
@@ -97,11 +87,7 @@ public class TestRunner {
                 .forEach(e -> {
                     try {
                         e.invoke(object);
-                    } catch (IllegalAccessException e1) {
-                        e1.printStackTrace();
-                    } catch (InvocationTargetException e1) {
-                        e1.printStackTrace();
-                    } catch (Throwable e1) {
+                    } catch (ReflectiveOperationException e1) {
                         e1.printStackTrace();
                     }
                 });
@@ -114,11 +100,7 @@ public class TestRunner {
                     System.out.println("ТЕСТ: " + e.getName());
                     try {
                         e.invoke(object);
-                    } catch (IllegalAccessException e1) {
-                        e1.printStackTrace();
-                    } catch (InvocationTargetException e1) {
-                        e1.printStackTrace();
-                    } catch (Throwable e1) {
+                    } catch (ReflectiveOperationException e1) {
                         e1.printStackTrace();
                     }
                     runMethods(object, testClass.getAfterMethods());
