@@ -1,25 +1,29 @@
 package ru.otus.serialization;
 
+import com.google.gson.Gson;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 import java.util.Arrays;
+import java.util.List;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class MyJsonTest {
     private MyJson myJson;
+    private Gson gson;
 
     @BeforeAll
     public void init() {
         myJson = new MyJson();
+        gson = new Gson();
     }
 
     @Test
     public void toJsonNullTest() {
-        String expected = "null";
-        Assertions.assertEquals(expected, myJson.toJson((Object) null));
+        String expected = gson.toJson(null);
+        Assertions.assertEquals(expected, myJson.toJson(null));
     }
 
     @Test
@@ -35,26 +39,36 @@ public class MyJsonTest {
 
     @Test
     public void toJsonObjectTest() {
-        String expected = "{\"test\":\"test\",\"name\":\"test\",\"age\":110,\"object\":null,\"array\":[15,25]," +
-                "\"collection\":{\"a\":[\"Test1\",5,\"Test2\",null]},\"father\":{\"value\":18}}";
-        String actual = myJson.toJson(new Person("test", 110));
+        Person person = new Person("test", 110);
+        String expected = gson.toJson(person);
+        String actual = myJson.toJson(person);
         System.out.println(actual);
         Assertions.assertEquals(expected, actual);
     }
 
     @Test
     public void toJsonArrayTest() {
-        String expected = "[\"test\",555,[5,88]]";
-        String actual = myJson.toJson(new Object[]{"test", 555, new int[]{5, 88}});
+        Object[] objects = {"test", 555, new int[]{5, 88}};
+        String expected = gson.toJson(objects);
+        String actual = myJson.toJson(objects);
         System.out.println(actual);
         Assertions.assertEquals(expected, actual);
     }
 
     @Test
     public void toJsonCollectionTest() {
-        String expected = "{\"a\":[\"Test1\",5875,\"Test2\"]}";
-        String actual = myJson.toJson(Arrays.asList("Test1", 5875, "Test2"));
+        List<?> list = Arrays.asList("Test1", 5875, "Test2");
+        String expected = gson.toJson(list);
+        String actual = myJson.toJson(list);
         System.out.println(actual);
         Assertions.assertEquals(expected, actual);
+    }
+
+    @Test
+    public void toJsonComplexTest() {
+        Assertions.assertEquals("null", myJson.toJson(null));
+        String expected = myJson.toJson(new int[]{1, 2, 3});
+        Assertions.assertEquals(expected, myJson.toJson(List.of(1, 2, 3)));
+        Assertions.assertEquals(expected, myJson.toJson(Arrays.asList(1, 2, 3)));
     }
 }

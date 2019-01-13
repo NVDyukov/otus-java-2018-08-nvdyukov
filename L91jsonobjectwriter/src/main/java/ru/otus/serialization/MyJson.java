@@ -7,6 +7,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -32,7 +33,10 @@ public class MyJson {
             } else if (JsonElement.isConvertToJsonArray(aClass)) {
                 jsonArray.add(getJsonArray(o));
             } else {
-                jsonArray.add(getJsonObject(o, aClass));
+                if (src instanceof Collection) {
+                    jsonArray.add(getJsonArray(((Collection) src).toArray()));
+                } else
+                    jsonArray.add(getJsonObject(o, aClass));
             }
 
         }
@@ -49,7 +53,6 @@ public class MyJson {
                 objectField = e.get(src);
                 String name = e.getName();
                 if (objectField == null) {
-                    jsonObject.add(name, null);
                     continue;
                 }
                 Class<?> oClass = objectField.getClass();
@@ -59,7 +62,10 @@ public class MyJson {
                 } else if (JsonElement.isConvertToJsonArray(oClass)) {
                     jsonObject.add(name, getJsonArray(objectField));
                 } else {
-                    jsonObject.add(name, getJsonObject(objectField, oClass));
+                    if (objectField instanceof Collection) {
+                        jsonObject.add(name, getJsonArray(((Collection) objectField).toArray()));
+                    } else
+                        jsonObject.add(name, getJsonObject(objectField, oClass));
                 }
             } catch (IllegalAccessException e1) {
                 e1.printStackTrace();
@@ -74,18 +80,21 @@ public class MyJson {
                 .collect(Collectors.toList());
     }
 
-    protected String toJson(JsonElement jsonElement) {
+    private String toJson(JsonElement jsonElement) {
         JsonWriter jsonWriter = new JsonWriter();
         jsonElement.accept(jsonWriter);
         return jsonWriter.toString();
     }
 
-    protected String toJson(Object src, Class<?> clazz) {
+    private String toJson(Object src, Class<?> clazz) {
         if (JsonElement.isConvertToJsonPrimitive(clazz)) {
             return toJson(new JsonPrimitive(src));
         } else if (JsonElement.isConvertToJsonArray(clazz)) {
             return toJson(getJsonArray(src));
         } else {
+            if (src instanceof Collection) {
+                return toJson(getJsonArray(((Collection) src).toArray()));
+            }
             return toJson(getJsonObject(src, clazz));
         }
     }
