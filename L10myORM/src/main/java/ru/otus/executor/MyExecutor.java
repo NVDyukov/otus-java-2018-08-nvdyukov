@@ -1,77 +1,54 @@
 package ru.otus.executor;
 
+import org.ehcache.Cache;
 import ru.otus.exceptions.ORMException;
 import ru.otus.model.DataSet;
-import ru.otus.reflect.ClassesHelper;
-import ru.otus.reflect.types.ValidClassType;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static ru.otus.reflect.ClassesHelper.*;
+
 public class MyExecutor implements AutoCloseable {
-    private final String SQL_COLUMNS = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='%s' AND " +
-            "TABLE_SCHEMA = 'PUBLIC' AND NOT DATA_TYPE = -5";
-    private final String SQL_SELECT_BY_ID = "SELECT * FROM %s WHERE ID = %d";
+    private final String SQL_SELECT_BY_ID = "SELECT %s FROM %s WHERE ID = %d";
     private final String SQL_INSERT = "INSERT INTO %s(%s) VALUES (%s)";
     private final Connection connection;
     private final String DELIMITER = ",";
-    private String tableName = "USERS";
+    private CacheBuilder cacheBuilder;
+    private Cache<Class, Map> cache;
 
-    public String getTableName() {
-        return tableName;
+    private String getNames(Map<String, Field> valueFields) {
+        return valueFields.keySet()
+                .stream()
+                .collect(Collectors.joining(DELIMITER));
     }
 
-    public void setTableName(String tableName) {
-        this.tableName = tableName;
-    }
-
-    private Predicate<Field> getFieldPredicate(List<String> columnNames) {
-        return e -> {
-            int modifiers = e.getModifiers();
-            return !Modifier.isTransient(modifiers) && !Modifier.isStatic(modifiers)
-                    && ValidClassType.isContainsType(e.getType())
-                    && columnNames.stream()
-                    .anyMatch(e.getName().toUpperCase()::equals);
-        };
-    }
-
-    List<String> columnNames(ResultSetMetaData metaData) {
-        int columnCount = 0;
-        ArrayList<String> names = new ArrayList<>();
-        try {
-            columnCount = metaData.getColumnCount();
-            for (int i = 1; i <= columnCount; i++) {
-                names.add(metaData.getColumnName(i));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+    private Map<String, Field> getStringFieldMap(Class<?> clazz) {
+        Map<String, Field> map;
+        if (cache.containsKey(clazz)) {
+            map = cache.get(clazz);
+        } else {
+            map = getClassesFields(clazz, filterField());
+            cache.put(clazz, map);
         }
-        return names;
+        return map;
     }
 
-    List<String> columnNames(String table) {
-        ArrayList<String> columnNames = new ArrayList<>();
-        executeQuery(String.format(SQL_COLUMNS, table), e -> {
-            try {
-                while (e.next()) {
-                    columnNames.add(e.getString("COLUMN_NAME"));
-                }
 
-            } catch (SQLException e1) {
-                e1.printStackTrace();
-            }
-
-        });
-        return columnNames;
+    private Optional<Map.Entry<String, Field>> getStringFieldEntry(Map<String, Field> classesFields) {
+        return classesFields.entrySet()
+                .parallelStream()
+                .filter((entry) -> isAnnotationIdPresent(entry.getValue()))
+                .findFirst();
     }
 
-    Map<String, Object> columnValues(List<String> columnNames, ResultSet resultSet) {
+    Map<String, Object> columnValues(Set<String> columnNames, ResultSet resultSet) {
         HashMap<String, Object> columnValues = new HashMap<>();
         for (String name : columnNames) {
             try {
@@ -86,6 +63,9 @@ public class MyExecutor implements AutoCloseable {
     public MyExecutor(Connection connection) {
         Objects.requireNonNull(connection);
         this.connection = connection;
+        this.cacheBuilder = new CacheBuilder();
+        this.cacheBuilder.setEntries(2);
+        this.cache = cacheBuilder.build("reflection", Class.class, HashMap.class);
     }
 
     public void executeQuery(String query, ResultSetHandler resultSetHandler) {
@@ -115,45 +95,60 @@ public class MyExecutor implements AutoCloseable {
     }
 
     public <T extends DataSet> void save(T user) {
-        Class<? extends DataSet> clazz = user.getClass();
-        //clazz.getSimpleName();
-        List<String> columnNames = columnNames(tableName);
-        Map<String, String> valueFields = ClassesHelper.getClassesFields(user, clazz, getFieldPredicate(columnNames));
-        String names = valueFields.keySet()
-                .stream()
-                .collect(Collectors.joining(DELIMITER));
-        String values = valueFields.values()
+        Class<?> clazz = user.getClass();
+        String tableName = clazz.getSimpleName();
+        Map<String, Field> classesFields = getStringFieldMap(clazz);
+        Optional<Map.Entry<String, Field>> idField = getStringFieldEntry(classesFields);
+        classesFields = classesFields.entrySet()
+                .parallelStream()
+                .filter((entry) -> !isAnnotationIdPresent(entry.getValue()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        String names = getNames(classesFields);
+        String values = convertToMapValueFields(user, classesFields).values()
                 .stream()
                 .collect(Collectors.joining(DELIMITER));
         String insert = String.format(SQL_INSERT, tableName, names, values);
-        createQuery(insert, e -> {
+        createQuery(insert, e ->
+        {
             try {
                 e.next();
-                user.setId(e.getLong("ID"));
-            } catch (SQLException e1) {
-                e1.printStackTrace();
+                if (idField.isPresent()) {
+                    Field value = idField.get().getValue();
+                    value.setAccessible(true);
+                    value.set(user, e.getLong(idField.get().getKey()));
+                }
+            } catch (SQLException | IllegalAccessException ex) {
+                throw new ORMException(ex);
             }
         });
     }
 
     public <T extends DataSet> T load(long id, Class<T> clazz) {
-        //clazz.getSimpleName();
-        String select = String.format(SQL_SELECT_BY_ID, tableName, id);
-        AtomicReference<T> object = new AtomicReference<>();
+        String tableName = clazz.getSimpleName();
+        Map<String, Field> classesFields = getStringFieldMap(clazz);
+        String names = getNames(classesFields);
+        String select = String.format(SQL_SELECT_BY_ID, names, tableName, id);
+        var ref = new Object() {
+            Map<String, Object> map = null;
+        };
         executeQuery(select, e -> {
             try {
                 if (e.next()) {
-                    List<String> names = columnNames(e.getMetaData());
-                    Map<String, Object> values = columnValues(names, e);
-                    object.set(ClassesHelper.initObject(clazz, getFieldPredicate(names), values));
-                } else throw new ORMException("В таблице нет строки с ID = " + String.valueOf(id));
-
-            } catch (SQLException | ClassNotFoundException | NoSuchMethodException | IllegalAccessException
-                    | InvocationTargetException | InstantiationException | ORMException e1) {
-                e1.printStackTrace();
+                    ref.map = columnValues(classesFields.keySet(), e);
+                } else throw new ORMException("Не удалось найти запись");
+            } catch (SQLException ex) {
+                throw new ORMException(ex);
             }
         });
-        return object.get();
+        T object;
+        try {
+            object = initObject(clazz, classesFields, ref.map);
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException
+                | InstantiationException ex) {
+            throw new ORMException(ex);
+        }
+        return object;
     }
 
     @Override
@@ -161,5 +156,6 @@ public class MyExecutor implements AutoCloseable {
         if (connection != null) {
             connection.close();
         }
+        cacheBuilder.close();
     }
 }

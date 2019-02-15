@@ -1,9 +1,11 @@
 package ru.otus.reflect;
 
+import ru.otus.annotations.Id;
 import ru.otus.reflect.types.ValidClassType;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -89,12 +91,40 @@ public final class ClassesHelper {
         Map<String, Field> classesFields = getClassesFields(clazz, filter);
         Class.forName(clazz.getName());
         Field field = null;
+        Object o = null;
         T object = clazz.getDeclaredConstructor().newInstance();
         for (Map.Entry<String, Field> entry : classesFields.entrySet()) {
             field = entry.getValue();
             field.setAccessible(true);
-            field.set(object, values.get(entry.getKey().toUpperCase()));
+            o = values.get(entry.getKey().toUpperCase());
+            if (Objects.nonNull(o))
+                field.set(object, o);
         }
         return object;
     }
+
+    public static <T> T initObject(Class<T> clazz, Map<String, Field> fields, Map<String, Object> values)
+            throws ClassNotFoundException, NoSuchMethodException, IllegalAccessException,
+            InvocationTargetException, InstantiationException {
+        T object = clazz.getDeclaredConstructor().newInstance();
+        for (Map.Entry<String, Field> entry : fields.entrySet()) {
+            Field field = entry.getValue();
+            field.setAccessible(true);
+            field.set(object, values.get(entry.getKey()));
+        }
+        return object;
+    }
+
+    public static boolean isAnnotationIdPresent(Field field) {
+        return field.isAnnotationPresent(Id.class);
+    }
+
+    public static Predicate<Field> filterField() {
+        return field -> {
+            int modifiers = field.getModifiers();
+            return !Modifier.isTransient(modifiers) && !Modifier.isStatic(modifiers)
+                    && ValidClassType.isContainsType(field.getType());
+        };
+    }
+
 }

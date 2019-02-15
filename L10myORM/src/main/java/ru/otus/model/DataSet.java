@@ -1,8 +1,11 @@
 package ru.otus.model;
 
+import ru.otus.annotations.Id;
+
 import java.util.Objects;
 
 public abstract class DataSet {
+    @Id
     private long id;
 
     public DataSet() {
@@ -14,10 +17,6 @@ public abstract class DataSet {
 
     public long getId() {
         return id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
     }
 
     @Override
